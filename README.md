@@ -1,6 +1,7 @@
 # CivicThreads
 Aggregate solution for community involvement with complaints/warnings to local government officials in a centralized webapp.
 
+
 ## Framework
 Gemini, Firebase Auth, Firestore Database
 HTML, CSS (Vanilla no tailwind), React.js/Node.js
