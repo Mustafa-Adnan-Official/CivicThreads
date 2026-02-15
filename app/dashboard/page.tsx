@@ -74,11 +74,14 @@ export default function DashboardPage() {
   const maxUpvotes = Math.max(1, ...filteredThreads.map((t) => t.upvoteCount));
   const maxIssueCount = Math.max(1, ...filteredThreads.map((t) => t.issueCount));
 
+  const [submitMessage, setSubmitMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
   async function handleSubmitIssue(text: string, publicMode: "ANON" | "PUBLIC") {
     if (!user) return;
     setIsSubmitting(true);
+    setSubmitMessage(null);
     try {
-      await submitIssue({
+      const result = await submitIssue({
         wardId: selectedWardId,
         cityId: selectedCityId,
         text,
@@ -88,6 +91,18 @@ export default function DashboardPage() {
       });
       const updated = await getThreads(selectedWardId, selectedCityId);
       setThreads(updated);
+
+      const threadCount = result.threadIds.length;
+      if (result.action === "CREATE") {
+        const extra = threadCount > 1 ? ` and linked to ${threadCount - 1} existing thread${threadCount > 2 ? "s" : ""}` : "";
+        setSubmitMessage({ text: `Issue submitted — a new thread was created${extra}.`, type: "success" });
+      } else {
+        setSubmitMessage({ text: `Issue submitted — matched to ${threadCount} existing thread${threadCount > 1 ? "s" : ""}.`, type: "success" });
+      }
+      setTimeout(() => setSubmitMessage(null), 5000);
+    } catch (err) {
+      setSubmitMessage({ text: err instanceof Error ? err.message : "Submit failed", type: "error" });
+      setTimeout(() => setSubmitMessage(null), 5000);
     } finally {
       setIsSubmitting(false);
     }
@@ -129,6 +144,18 @@ export default function DashboardPage() {
           onZoomChange={setHeatmapZoom}
         />
       </main>
+      {/* Submit feedback toast */}
+      {submitMessage && (
+        <div
+          className={`fixed bottom-20 left-1/2 -translate-x-1/2 z-40 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium transition-all animate-in fade-in slide-in-from-bottom-2 ${
+            submitMessage.type === "success"
+              ? "bg-emerald-600 text-white"
+              : "bg-red-600 text-white"
+          }`}
+        >
+          {submitMessage.text}
+        </div>
+      )}
       <SubmitIssueBar onSubmit={handleSubmitIssue} isSubmitting={isSubmitting} />
     </div>
   );

@@ -15,13 +15,16 @@ import {
   toggleThreadUpvote,
   toggleIssueUpvote,
   submitIssue,
+  getWardRepEmail,
+  submitAnnouncement,
 } from "@/lib/data-service";
+import { DEFAULT_CITY_ID } from "@/lib/constants";
 import type { Thread, Issue, Announcement } from "@/lib/types";
 
 type Tab = "issues" | "announcements";
 
 export default function ThreadPage() {
-  const { user, signOut } = useAuth();
+  const { user, firebaseUser, signOut } = useAuth();
   const router = useRouter();
   const params = useParams();
   const wardId = params.wardId as string;
@@ -35,6 +38,13 @@ export default function ThreadPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Announcement posting state (button visible to all, validated on click)
+  const [repVerified, setRepVerified] = useState(false);
+  const [repCheckDenied, setRepCheckDenied] = useState(false);
+  const [isCheckingRep, setIsCheckingRep] = useState(false);
+  const [announcementText, setAnnouncementText] = useState("");
+  const [isPostingAnnouncement, setIsPostingAnnouncement] = useState(false);
+
   useEffect(() => {
     if (!user) {
       router.push("/signin");
@@ -47,8 +57,8 @@ export default function ThreadPage() {
 
   useEffect(() => {
     if (!wardId || !threadId) return;
-    getThread(wardId, threadId).then(setThread);
-    getAnnouncements(threadId, wardId, "markham").then(setAnnouncements);
+    getThread(wardId, threadId, DEFAULT_CITY_ID).then(setThread);
+    getAnnouncements(threadId, wardId, DEFAULT_CITY_ID).then(setAnnouncements);
   }, [wardId, threadId]);
 
   useEffect(() => {
@@ -56,14 +66,14 @@ export default function ThreadPage() {
       setIssues([]);
       return;
     }
-    getIssuesByIds(thread.issueIds, wardId).then((list) => {
+    getIssuesByIds(thread.issueIds, wardId, DEFAULT_CITY_ID).then((list) => {
       const sorted = [...list].sort((a, b) => {
         if (b.upvoteCount !== a.upvoteCount) return b.upvoteCount - a.upvoteCount;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
       setIssues(sorted);
     });
-  }, [thread?.issueIds]);
+  }, [thread?.issueIds, wardId]);
 
   const filteredIssues = searchQuery.trim()
     ? issues.filter(
@@ -82,7 +92,7 @@ export default function ThreadPage() {
   async function handleThreadUpvote() {
     if (!user || !thread) return;
     try {
-      const result = await toggleThreadUpvote(wardId, threadId, user.uid, "markham");
+      const result = await toggleThreadUpvote(wardId, threadId, user.uid, DEFAULT_CITY_ID);
       setThread((prev) =>
         prev
           ? {
@@ -100,7 +110,7 @@ export default function ThreadPage() {
   async function handleIssueUpvote(issueId: string) {
     if (!user) return;
     try {
-      const result = await toggleIssueUpvote(issueId, user.uid, wardId, "markham");
+      const result = await toggleIssueUpvote(issueId, user.uid, wardId, DEFAULT_CITY_ID);
       setIssues((prev) =>
         prev.map((i) =>
           i.issueId === issueId
@@ -123,17 +133,18 @@ export default function ThreadPage() {
     try {
       await submitIssue({
         wardId,
-        cityId: "markham",
+        cityId: DEFAULT_CITY_ID,
         text,
         authorUid: user.uid,
         publicIdentityMode: publicMode,
         publicDisplayName:
           publicMode === "PUBLIC" ? user.accountName : "Anonymous Samaritan",
       });
-      const updated = await getThread(wardId, threadId, "markham");
+      // Refresh thread data (Gemini may have updated the summary/title)
+      const updated = await getThread(wardId, threadId, DEFAULT_CITY_ID);
       if (updated) setThread(updated);
       const freshIssues = updated?.issueIds
-        ? await getIssuesByIds(updated.issueIds, wardId, "markham")
+        ? await getIssuesByIds(updated.issueIds, wardId, DEFAULT_CITY_ID)
         : [];
       const sorted = [...freshIssues].sort((a, b) => {
         if (b.upvoteCount !== a.upvoteCount) return b.upvoteCount - a.upvoteCount;
@@ -142,6 +153,52 @@ export default function ThreadPage() {
       setIssues(sorted);
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function handleAnnouncementClick() {
+    if (repVerified) {
+      setRepVerified(false);
+      setAnnouncementText("");
+      return;
+    }
+    if (repCheckDenied) {
+      setRepCheckDenied(false);
+      return;
+    }
+    setIsCheckingRep(true);
+    setRepCheckDenied(false);
+    try {
+      const wardRepEmail = await getWardRepEmail(wardId, DEFAULT_CITY_ID);
+      const callerEmail = firebaseUser?.email?.toLowerCase().trim() ?? "";
+      if (wardRepEmail && callerEmail && wardRepEmail === callerEmail) {
+        setRepVerified(true);
+      } else {
+        setRepCheckDenied(true);
+      }
+    } catch (e) {
+      console.error("Rep check failed:", e);
+      setRepCheckDenied(true);
+    } finally {
+      setIsCheckingRep(false);
+    }
+  }
+
+  async function handlePostAnnouncement() {
+    if (!user || !announcementText.trim()) return;
+    setIsPostingAnnouncement(true);
+    try {
+      await submitAnnouncement({ wardId, threadId, cityId: DEFAULT_CITY_ID, text: announcementText.trim() });
+      const fresh = await getAnnouncements(threadId, wardId, DEFAULT_CITY_ID);
+      setAnnouncements(fresh);
+      setAnnouncementText("");
+      setRepVerified(false);
+      setActiveTab("announcements");
+    } catch (e) {
+      console.error("Failed to post announcement:", e);
+      alert(e instanceof Error ? e.message : "Failed to post announcement");
+    } finally {
+      setIsPostingAnnouncement(false);
     }
   }
 
@@ -207,7 +264,7 @@ export default function ThreadPage() {
           </div>
         </div>
 
-        <div className="flex gap-2 mb-4">
+        <div className="flex items-center gap-2 mb-4">
           <button
             onClick={() => setActiveTab("issues")}
             className={`px-4 py-2 rounded-md font-medium transition-colors ${
@@ -228,7 +285,48 @@ export default function ThreadPage() {
           >
             Announcements
           </button>
+          <button
+            onClick={handleAnnouncementClick}
+            disabled={isCheckingRep}
+            className="ml-auto px-4 py-2 rounded-md font-medium text-sm transition-colors bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50"
+          >
+            {isCheckingRep
+              ? "Verifying…"
+              : repVerified
+              ? "Cancel"
+              : "Add Announcement"}
+          </button>
         </div>
+
+        {repCheckDenied && (
+          <div className="mb-4 px-4 py-3 rounded-lg border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-950/30 text-sm text-red-700 dark:text-red-300">
+            You are not the ward representative for this ward. Only the rep whose email is on file can post announcements.
+          </div>
+        )}
+
+        {repVerified && (
+          <div className="mb-4 p-4 rounded-lg border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/30">
+            <label className="block text-sm font-medium text-amber-800 dark:text-amber-300 mb-2">
+              New Announcement
+            </label>
+            <textarea
+              value={announcementText}
+              onChange={(e) => setAnnouncementText(e.target.value)}
+              placeholder="Write your announcement for this thread…"
+              rows={3}
+              className="w-full rounded-md border border-amber-300 dark:border-amber-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 dark:placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-amber-500 resize-none"
+            />
+            <div className="flex justify-end mt-2">
+              <button
+                onClick={handlePostAnnouncement}
+                disabled={!announcementText.trim() || isPostingAnnouncement}
+                className="px-4 py-2 rounded-md text-sm font-medium transition-colors bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isPostingAnnouncement ? "Posting…" : "Post"}
+              </button>
+            </div>
+          </div>
+        )}
 
         {activeTab === "issues" ? (
           <div className="space-y-4">

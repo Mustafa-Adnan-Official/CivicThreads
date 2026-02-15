@@ -159,6 +159,13 @@ async function getIdToken(): Promise<string> {
   return user.getIdToken();
 }
 
+export interface SubmitIssueResult {
+  issueId: string;
+  threadIds: string[];
+  action: "MATCH" | "CREATE";
+  newThreadId: string | null;
+}
+
 export async function submitIssue(params: {
   cityId?: string;
   wardId: string;
@@ -167,7 +174,7 @@ export async function submitIssue(params: {
   authorUid: string;
   publicIdentityMode: "ANON" | "PUBLIC";
   publicDisplayName: string;
-}): Promise<{ threadId: string; issueId: string }> {
+}): Promise<SubmitIssueResult> {
   const token = await getIdToken();
   const res = await fetch("/api/submit-issue", {
     method: "POST",

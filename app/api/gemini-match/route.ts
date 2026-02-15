@@ -3,7 +3,7 @@ import { getAdminDb } from "@/lib/firebaseAdmin";
 import { matchIssueToThreads } from "@/lib/gemini";
 import { DEFAULT_CITY_ID, DEFAULT_WARD_ID } from "@/lib/constants";
 
-const CANDIDATE_LIMIT = 20;
+const CANDIDATE_LIMIT = 30;
 
 export async function POST(req: NextRequest) {
   try {
@@ -32,8 +32,8 @@ export async function POST(req: NextRequest) {
       const data = d.data();
       return {
         threadId: d.id,
-        title: data.title ?? "",
-        aiSummary: data.aiSummary ?? "",
+        title: (data.title as string) ?? "",
+        aiSummary: (data.aiSummary as string) ?? "",
       };
     });
 
