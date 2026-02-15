@@ -6,7 +6,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Header } from "@/components/Header";
 import { IssueCard } from "@/components/IssueCard";
 import { AnnouncementCard } from "@/components/AnnouncementCard";
-import { IssueSubmissionBar } from "@/components/IssueSubmissionBar";
+import { SubmitIssueBar } from "@/components/SubmitIssueBar";
+import { UpvoteButton } from "@/components/UpvoteButton";
 import {
   getThread,
   getIssuesByIds,
@@ -16,6 +17,7 @@ import {
   toggleIssueUpvote,
   submitIssue,
 } from "@/lib/data-service";
+import { DEFAULT_CITY_ID, DEFAULT_WARD_ID } from "@/lib/constants";
 import type { Thread, Issue, Announcement } from "@/lib/types";
 
 type Tab = "issues" | "announcements";
@@ -24,8 +26,9 @@ export default function ThreadPage() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const params = useParams();
-  const wardId = params.wardId as string;
   const threadId = params.threadId as string;
+  const wardId = DEFAULT_WARD_ID;
+  const cityId = DEFAULT_CITY_ID;
 
   const [thread, setThread] = useState<Thread | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -37,33 +40,33 @@ export default function ThreadPage() {
 
   useEffect(() => {
     if (!user) {
-      router.push("/signin");
+      router.push("/login");
       return;
     }
-    getWards().then((w) =>
+    getWards(cityId).then((w) =>
       setWards(w.map((ward) => ({ wardId: ward.wardId, wardName: ward.wardName })))
     );
-  }, [user, router]);
+  }, [user, router, cityId]);
 
   useEffect(() => {
-    if (!wardId || !threadId) return;
-    getThread(wardId, threadId).then(setThread);
-    getAnnouncements(threadId, wardId, "markham").then(setAnnouncements);
-  }, [wardId, threadId]);
+    if (!threadId) return;
+    getThread(wardId, threadId, cityId).then(setThread);
+    getAnnouncements(threadId, wardId, cityId).then(setAnnouncements);
+  }, [threadId, wardId, cityId]);
 
   useEffect(() => {
     if (!thread?.issueIds?.length) {
       setIssues([]);
       return;
     }
-    getIssuesByIds(thread.issueIds, wardId).then((list) => {
+    getIssuesByIds(thread.issueIds, wardId, cityId).then((list) => {
       const sorted = [...list].sort((a, b) => {
         if (b.upvoteCount !== a.upvoteCount) return b.upvoteCount - a.upvoteCount;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
       setIssues(sorted);
     });
-  }, [thread?.issueIds]);
+  }, [thread?.issueIds, wardId, cityId]);
 
   const filteredIssues = searchQuery.trim()
     ? issues.filter(
@@ -72,23 +75,23 @@ export default function ThreadPage() {
           i.publicDisplayName.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : issues;
-
-  const topIssues = filteredIssues.slice(0, 5);
-  const remainingIssues = filteredIssues.slice(5).sort((a, b) => {
+  const displayIssues = [...filteredIssues].sort((a, b) => {
+    if (b.upvoteCount !== a.upvoteCount) return b.upvoteCount - a.upvoteCount;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
-  const displayIssues = [...topIssues, ...remainingIssues];
 
   async function handleThreadUpvote() {
     if (!user || !thread) return;
     try {
-      const result = await toggleThreadUpvote(wardId, threadId, user.uid, "markham");
+      const result = await toggleThreadUpvote(wardId, threadId, user.uid, cityId);
       setThread((prev) =>
         prev
           ? {
               ...prev,
               upvoteCount: result.upvoteCount,
-              upvoteUids: result.upvoted ? [...prev.upvoteUids, user.uid] : prev.upvoteUids.filter((id) => id !== user.uid),
+              upvoteUids: result.upvoted
+                ? [...prev.upvoteUids, user.uid]
+                : prev.upvoteUids.filter((id) => id !== user.uid),
             }
           : null
       );
@@ -100,14 +103,16 @@ export default function ThreadPage() {
   async function handleIssueUpvote(issueId: string) {
     if (!user) return;
     try {
-      const result = await toggleIssueUpvote(issueId, user.uid, wardId, "markham");
+      const result = await toggleIssueUpvote(issueId, user.uid, wardId, cityId);
       setIssues((prev) =>
         prev.map((i) =>
           i.issueId === issueId
             ? {
                 ...i,
                 upvoteCount: result.upvoteCount,
-                upvoteUids: result.upvoted ? [...i.upvoteUids, user.uid] : i.upvoteUids.filter((id) => id !== user.uid),
+                upvoteUids: result.upvoted
+                  ? [...i.upvoteUids, user.uid]
+                  : i.upvoteUids.filter((id) => id !== user.uid),
               }
             : i
         )
@@ -118,28 +123,28 @@ export default function ThreadPage() {
   }
 
   async function handleSubmitIssue(text: string, publicMode: "ANON" | "PUBLIC") {
-    if (!user || !thread) return;
+    if (!user) return;
     setIsSubmitting(true);
     try {
       await submitIssue({
         wardId,
-        cityId: "markham",
+        cityId,
         text,
         authorUid: user.uid,
         publicIdentityMode: publicMode,
         publicDisplayName:
           publicMode === "PUBLIC" ? user.accountName : "Anonymous Samaritan",
       });
-      const updated = await getThread(wardId, threadId, "markham");
+      const updated = await getThread(wardId, threadId, cityId);
       if (updated) setThread(updated);
-      const freshIssues = updated?.issueIds
-        ? await getIssuesByIds(updated.issueIds, wardId, "markham")
-        : [];
-      const sorted = [...freshIssues].sort((a, b) => {
-        if (b.upvoteCount !== a.upvoteCount) return b.upvoteCount - a.upvoteCount;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-      setIssues(sorted);
+      if (updated?.issueIds?.length) {
+        const freshIssues = await getIssuesByIds(updated.issueIds, wardId, cityId);
+        const sorted = [...freshIssues].sort((a, b) => {
+          if (b.upvoteCount !== a.upvoteCount) return b.upvoteCount - a.upvoteCount;
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+        });
+        setIssues(sorted);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -164,12 +169,12 @@ export default function ThreadPage() {
         onSearchChange={setSearchQuery}
         wardOptions={wards}
         selectedWardId={wardId}
-        onWardChange={() => router.push("/")}
+        onWardChange={() => router.push("/dashboard")}
         showWardSelector={true}
         user={user}
         onSignOut={() => {
           signOut();
-          router.replace("/signin");
+          router.replace("/login");
         }}
         transparent={true}
       />
@@ -182,17 +187,11 @@ export default function ThreadPage() {
             {thread.aiSummary}
           </p>
           <div className="flex items-center gap-4 text-sm">
-            <button
-              onClick={handleThreadUpvote}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition-colors ${
-                hasThreadUpvoted
-                  ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100"
-                  : "hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
-              }`}
-            >
-              <span>▲</span>
-              <span>{thread.upvoteCount} upvotes</span>
-            </button>
+            <UpvoteButton
+              count={thread.upvoteCount}
+              upvoted={hasThreadUpvoted}
+              onToggle={handleThreadUpvote}
+            />
             <span className="text-zinc-500 dark:text-zinc-500">
               {thread.issueCount} issues
             </span>
@@ -254,20 +253,14 @@ export default function ThreadPage() {
                 No announcements yet from the Ward Representative.
               </p>
             ) : (
-              [...announcements]
-                .sort(
-                  (a, b) =>
-                    new Date(b.createdAt).getTime() -
-                    new Date(a.createdAt).getTime()
-                )
-                .map((ann) => (
-                  <AnnouncementCard key={ann.announcementId} announcement={ann} />
-                ))
+              announcements.map((ann) => (
+                <AnnouncementCard key={ann.announcementId} announcement={ann} />
+              ))
             )}
           </div>
         )}
       </main>
-      <IssueSubmissionBar
+      <SubmitIssueBar
         onSubmit={handleSubmitIssue}
         isSubmitting={isSubmitting}
       />

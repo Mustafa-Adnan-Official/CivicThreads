@@ -179,7 +179,7 @@ export function Heatmap({
               return (
                 <Link
                   key={thread.threadId}
-                  href={`/ward/${wardId}/thread/${thread.threadId}`}
+                  href={`/thread/${thread.threadId}`}
                   className={`absolute flex items-center justify-center p-1.5 rounded border-2 border-white/60 dark:border-zinc-600/60 shadow-md hover:scale-105 hover:z-10 hover:shadow-lg transition-all cursor-pointer text-center ${color}`}
                   style={{
                     left: x,

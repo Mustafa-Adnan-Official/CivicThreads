@@ -6,6 +6,9 @@ interface HeaderProps {
   searchPlaceholder?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  cityOptions?: { cityId: string; cityName: string }[];
+  selectedCityId?: string;
+  onCityChange?: (cityId: string) => void;
   wardOptions?: { wardId: string; wardName: string }[];
   selectedWardId?: string;
   onWardChange?: (wardId: string) => void;
@@ -23,6 +26,9 @@ export function Header({
   searchPlaceholder = "Search Threads",
   searchValue = "",
   onSearchChange,
+  cityOptions = [],
+  selectedCityId,
+  onCityChange,
   wardOptions = [],
   selectedWardId,
   onWardChange,
@@ -49,26 +55,41 @@ export function Header({
     >
       <div className="flex flex-col gap-1">
         <Link
-          href="/"
+          href="/dashboard"
           className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50 hover:opacity-80"
         >
           {logoPlaceholder}
           CivicThreads
         </Link>
-        {showWardSelector && wardOptions.length > 0 && (
+        {showWardSelector && (
           <div className="flex items-center gap-1.5">
             {logoPlaceholder}
-            <select
-              value={selectedWardId ?? ""}
-              onChange={(e) => onWardChange?.(e.target.value)}
-              className="px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white/90 dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100"
-            >
-              {wardOptions.map((w) => (
-                <option key={w.wardId} value={w.wardId}>
-                  {w.wardName}
-                </option>
-              ))}
-            </select>
+            {/* City selector */}
+            {cityOptions.length > 0 && onCityChange && (
+              <select
+                value={selectedCityId ?? ""}
+                onChange={(e) => onCityChange(e.target.value)}
+                className="px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white/90 dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100"
+              >
+                {cityOptions.map((c) => (
+                  <option key={c.cityId} value={c.cityId}>{c.cityName}</option>
+                ))}
+              </select>
+            )}
+            {/* Ward selector */}
+            {wardOptions.length > 0 && (
+              <select
+                value={selectedWardId ?? ""}
+                onChange={(e) => onWardChange?.(e.target.value)}
+                className="px-2 py-1 text-sm border border-zinc-300 dark:border-zinc-600 rounded bg-white/90 dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100"
+              >
+                {wardOptions.map((w) => (
+                  <option key={w.wardId} value={w.wardId}>
+                    {w.wardName}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
       </div>

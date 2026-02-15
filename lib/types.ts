@@ -8,6 +8,10 @@ export interface User {
   role: UserRole;
   accountName: string;
   createdAt: Date;
+  /** CITY_ADMIN / WARD_REP: which city this user belongs to */
+  cityId?: string;
+  /** WARD_REP: which ward this user is rep for */
+  wardId?: string;
 }
 
 export interface City {
