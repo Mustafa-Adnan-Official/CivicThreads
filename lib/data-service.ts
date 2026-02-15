@@ -228,3 +228,42 @@ export async function toggleIssueUpvote(
   if (!res.ok) throw new Error("Upvote failed");
   return res.json();
 }
+
+/**
+ * Read wardRepEmail from the ward document so the client can do a quick
+ * pre-check before showing the announcement textbox.
+ */
+export async function getWardRepEmail(
+  wardId: string,
+  cityId: string = DEFAULT_CITY_ID
+): Promise<string | null> {
+  if (!db) throw new Error("Database not ready");
+  const ref = doc(db, "cities", cityId, "wards", wardId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return null;
+  return (snap.data().wardRepEmail as string | undefined)?.toLowerCase()?.trim() ?? null;
+}
+
+export async function submitAnnouncement(params: {
+  cityId?: string;
+  wardId: string;
+  threadId: string;
+  text: string;
+}): Promise<{ announcementId: string; threadId: string }> {
+  const token = await getIdToken();
+  const res = await fetch("/api/post-announcement", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      cityId: params.cityId ?? DEFAULT_CITY_ID,
+      wardId: params.wardId,
+      threadId: params.threadId,
+      text: params.text,
+    }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error ?? "Failed to post announcement");
+  }
+  return res.json();
+}
