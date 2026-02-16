@@ -16,6 +16,18 @@ AI summary will auto update on every related issue post. If new issue gives new 
 
 All user's will have to log in, but residental users can choose to be anonymous.
 
+## Running the Vercel Demo:
+
+To access this project you will need to create a user account using your email address and a password. Note that there are 3 roles a user can sign up for which cannot be changed after account creation. It is recommended to pick either Ward Representative or Resident to access the entire user interface, as the City Admin role works behind the scenes to manage wards and areas.
+
+After creating your account Firebase will send a confirmation email, after completing the steps outlined in the email you gain access to the website. Please make suire to check your spam folder for the confirmation email as it could possibly be there.
+
+To navigate the website, you can pan the heatmap by holding down right click and dragging, or using your scroll wheel to zoom in and out.
+You can hover over thread boxes to see a short description in tooltip form, click to open the thread summary page.
+The search bar on the heat map page will find the thread of your choice, while searching in the Thread summary page navigates issues raised.
+To submit a new issue, simply type and send a short message detailing your concern, this can be done on any page.
+NOTE: Announcement creation is only accessible to ward representatives
+
 ## Getting Started
 
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
